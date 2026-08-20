@@ -7,17 +7,37 @@
 #include <QGroupBox>
 #include <QGridLayout>
 #include <QVBoxLayout>
+#include <QSettings>
+#include <QCoreApplication>
+#include <QDir>
+#include <QDebug>
 
 ConfigPage::ConfigPage(QWidget *parent)
     :QWidget(parent)
 {
     initUI();
     initConnect();
+    loadConfig();
 }
 
 ConfigPage::~ConfigPage()
 {
 
+}
+
+QString ConfigPage::ipAddress() const
+{
+    return m_ipEdit->text();
+}
+
+quint16 ConfigPage::port() const
+{
+    return static_cast<quint16>(m_portSpin->value());//对于小众类型进行强制类型转换
+}
+
+int ConfigPage::pollInterval() const
+{
+    return m_pollIntervalSpin->value();
 }
 
 void ConfigPage::initUI()
@@ -67,8 +87,53 @@ void ConfigPage::initUI()
 
 void ConfigPage::initConnect()
 {
+    //保存按钮点击信号 连接到 保存槽函数
+    connect(m_saveBtn,&QPushButton::clicked,this,&ConfigPage::saveConfig);
+
+    //恢复默认按钮点击信号 连接到 恢复默认槽函数
+    connect(m_resetBtn,&QPushButton::clicked,this,&ConfigPage::resetConfig);
 }
 
+void ConfigPage::loadConfig()
+{
+    //配置文件路径：可执行文件同级目录/config/settings.ini
+    QString configPath = QCoreApplication::applicationDirPath()+"/config/settings.ini";
+    QSettings settings(configPath,QSettings::IniFormat);
+
+    //读取配置，如果不存在则使用默认配置
+    m_ipEdit->setText(settings.value("Connection/IP",DEFAULT_IP).toString());
+    m_portSpin->setValue(settings.value("Connection/Port",DEFAULT_PORT).toInt());
+    m_pollIntervalSpin->setValue(settings.value("Connection/PollInterval",DEFAULT_POLL_INTERVAL).toInt());
+
+    qDebug()<<"配置已从"<<configPath<<"加载";
+}
+
+void ConfigPage::saveConfig()
+{
+    //确保配置目录存在
+    QString configDir = QCoreApplication::applicationDirPath() + "/config";
+    QDir dir(configDir);
+    if(!dir.exists()){dir.mkpath(".");}//???
+
+    QString configPath = configDir + "/settings.ini";
+    QSettings settings(configPath,QSettings::IniFormat);
+
+    //保存配置
+    settings.setValue("Connection/IP",m_ipEdit->text());
+    settings.setValue("Connection/Port",m_portSpin->value());
+    settings.setValue("Connection/PollInterval",m_pollIntervalSpin->value());
+
+    //同步到磁盘
+    settings.sync();
+    qDebug()<<"配置已保存到"<<configPath;
+}
+
+void ConfigPage::resetConfig()
+{
+    m_ipEdit->setText(DEFAULT_IP);
+    m_portSpin->setValue(DEFAULT_PORT);
+    m_pollIntervalSpin->setValue(DEFAULT_POLL_INTERVAL);
+}
 
 
 
