@@ -4,6 +4,12 @@ qt_add_executable(${PROJECT_NAME}
     ui/mainwindow.cpp
     ui/mainwindow.h
     ui/mainwindow.ui
+    ui/pages/monitorpage.h
+    ui/pages/monitorpage.cpp
+    ui/pages/chartpage.h
+    ui/pages/chartpage.cpp
+    ui/pages/configpage.cpp
+    ui/pages/configpage.h
 )
 
 target_link_libraries(${PROJECT_NAME}
