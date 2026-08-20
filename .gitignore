@@ -1,0 +1,25 @@
+# CMake 构建产物
+build/
+CMakeLists.txt.user
+*.cmake
+!CMakeLists.txt
+
+# Qt Creator 用户配置
+*.pro.user
+*.pro.user.*
+
+# 编译产物
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.lib
+moc_*
+ui_*
+qrc_*
+
+# 系统文件
+.DS_Store
+Thumbs.db
