@@ -14,12 +14,15 @@ qt_add_executable(${PROJECT_NAME}
     ui/widgets/indicatorlight.cpp
     core/logger.h
     core/logger.cpp
+    communication/modbusclient.h
 )
 
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
         Qt::Core
         Qt::Widgets
+        Qt::Network
+        Qt::SerialBus
 )
 
 target_include_directories(${PROJECT_NAME}

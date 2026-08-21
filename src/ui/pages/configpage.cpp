@@ -1,4 +1,5 @@
 #include "configpage.h"
+#include "core/logger.h"
 
 #include <QLabel>
 #include <QLineEdit>
@@ -106,6 +107,8 @@ void ConfigPage::loadConfig()
     m_pollIntervalSpin->setValue(settings.value("Connection/PollInterval",DEFAULT_POLL_INTERVAL).toInt());
 
     qDebug()<<"配置已从"<<configPath<<"加载";
+    //QString log = "配置已从"+configPath+"加载";
+    //Logger::info("log");为什么刚开始不输出
 }
 
 void ConfigPage::saveConfig()
@@ -127,9 +130,9 @@ void ConfigPage::saveConfig()
 
     //同步到磁盘
     settings.sync();
-    qDebug()<<"配置已保存到"<<configPath;
+    QString log = "配置已保存到"+configPath;
+    Logger::info(log);
 
-    //可以二次校验文件真的被保存了
 }
 
 void ConfigPage::resetConfig()
@@ -137,6 +140,7 @@ void ConfigPage::resetConfig()
     m_ipEdit->setText(DEFAULT_IP);
     m_portSpin->setValue(DEFAULT_PORT);
     m_pollIntervalSpin->setValue(DEFAULT_POLL_INTERVAL);
+    Logger::info("重置配置");
 }
 
 

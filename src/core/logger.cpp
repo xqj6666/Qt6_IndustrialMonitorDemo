@@ -14,12 +14,12 @@ Logger::Logger(QObject *parent)
 
 Logger::~Logger()
 {
-    if(m_stream){//???
-        m_stream->flush();
+    if(m_stream){
+        m_stream->flush();//把缓冲区残留日志强制刷入磁盘，防止程序退出日志丢在内存没写入硬盘
         delete m_stream;
     }
     if(m_logFile){
-        m_logFile->close();
+        m_logFile->close();//关闭磁盘文件句柄
         delete m_logFile;
     }
 }
@@ -53,29 +53,29 @@ void Logger::error(const QString &message)
 void Logger::initLogFile()
 {
     //日志目录：可执行文件同级目录/logs/
-    QString logDir = QCoreApplication::applicationDirPath() + "/logs";
+    QString logDir = QCoreApplication::applicationDirPath() + "/logs";//拼接日志文件夹
     QDir dir(logDir);
-    if(!dir.exists()){//如何logs不存在则创建
+    if(!dir.exists()){//如果logs文件夹不存在则创建
         dir.mkpath(logDir);
     }
 
     //日志文件名按照日期命名:2026-08-21.log
-    QString fileName = logDir + "/" + QDateTime::currentDateTime().toString("yyyy-MM-dd")+".log";
-    m_logFile = new QFile(fileName);
-    m_logFile->open(QIODevice::Append | QIODevice::Text);;//追加模式
+    QString fileName = logDir + "/" + QDateTime::currentDateTime().toString("yyyy-MM-dd")+".log";//按照当前日期生成日志文件名
+    m_logFile = new QFile(fileName);//在堆上创建QFile对象，只是把对象和文件路径绑定，不会创建磁盘文件也不会打开文件
+    m_logFile->open(QIODevice::Append | QIODevice::Text);;//追加模式,如果文件不存在自动创建
     m_stream = new QTextStream(m_logFile);
     m_stream->setEncoding(QStringConverter::Utf8);
 }
 
 void Logger::write(Level level, const QString &message)
 {
-    QMutexLocker locker(&m_mutex);//加锁，线程安全
+    QMutexLocker locker(&m_mutex);//加锁，线程安全，多线程同时写日志，保证串行执行
 
-    QString formatted = formatMessage(level,message);//???
+    QString formatted = formatMessage(level,message);//把时间、级别、日志内容拼接成格式化后的字符串
 
     if(m_stream){
-        *m_stream<<formatted<<"\n";
-        m_stream->flush();
+        *m_stream<<formatted<<"\n";//先写把消息写入缓冲区，换行
+        m_stream->flush();//强制缓冲区内容写入磁盘，防止崩溃
     }
 
     //发信号给UI

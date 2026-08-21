@@ -1,6 +1,7 @@
 #include "monitorpage.h"
 #include "ui/widgets/indicatorlight.h"
 
+
 #include <QLabel>
 #include <QGroupBox>
 #include <QTableWidget>

@@ -22,7 +22,7 @@ public:
         Warning,
         Error
     };
-    Q_ENUM(Level);//作用是什么？？？
+    Q_ENUM(Level);//把C++枚举注册到Qt元对象系统，信号槽参数可以传这个枚举
 
     //全局访问点
     static Logger *instance();
