@@ -10,6 +10,10 @@ qt_add_executable(${PROJECT_NAME}
     ui/pages/chartpage.cpp
     ui/pages/configpage.cpp
     ui/pages/configpage.h
+    ui/widgets/indicatorlight.h
+    ui/widgets/indicatorlight.cpp
+    core/logger.h
+    core/logger.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}

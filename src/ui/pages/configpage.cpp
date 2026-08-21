@@ -97,11 +97,11 @@ void ConfigPage::initConnect()
 void ConfigPage::loadConfig()
 {
     //配置文件路径：可执行文件同级目录/config/settings.ini
-    QString configPath = QCoreApplication::applicationDirPath()+"/config/settings.ini";
-    QSettings settings(configPath,QSettings::IniFormat);
+    QString configPath = QCoreApplication::applicationDirPath()+"/config/settings.ini";//获取exe可执行文件目录进行拼接
+    QSettings settings(configPath,QSettings::IniFormat);//指定文件路径，使用ini文件格式
 
     //读取配置，如果不存在则使用默认配置
-    m_ipEdit->setText(settings.value("Connection/IP",DEFAULT_IP).toString());
+    m_ipEdit->setText(settings.value("Connection/IP",DEFAULT_IP).toString());//读取键中的内容，第二个参数表示默认值
     m_portSpin->setValue(settings.value("Connection/Port",DEFAULT_PORT).toInt());
     m_pollIntervalSpin->setValue(settings.value("Connection/PollInterval",DEFAULT_POLL_INTERVAL).toInt());
 
@@ -110,22 +110,26 @@ void ConfigPage::loadConfig()
 
 void ConfigPage::saveConfig()
 {
+    //提前检测目录的可写性，如果没有权限就提醒用户
+
     //确保配置目录存在
     QString configDir = QCoreApplication::applicationDirPath() + "/config";
     QDir dir(configDir);
-    if(!dir.exists()){dir.mkpath(".");}//???
+    if(!dir.exists()){dir.mkpath(configDir);}//如果config文件夹不存在，就创建这个文件夹
 
     QString configPath = configDir + "/settings.ini";
-    QSettings settings(configPath,QSettings::IniFormat);
+    QSettings settings(configPath,QSettings::IniFormat);//再次构造QSettings对象，指向ini文件
 
     //保存配置
-    settings.setValue("Connection/IP",m_ipEdit->text());
+    settings.setValue("Connection/IP",m_ipEdit->text());//读取文件
     settings.setValue("Connection/Port",m_portSpin->value());
     settings.setValue("Connection/PollInterval",m_pollIntervalSpin->value());
 
     //同步到磁盘
     settings.sync();
     qDebug()<<"配置已保存到"<<configPath;
+
+    //可以二次校验文件真的被保存了
 }
 
 void ConfigPage::resetConfig()

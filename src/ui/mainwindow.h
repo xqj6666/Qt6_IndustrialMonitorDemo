@@ -10,6 +10,8 @@ class QSplitter;
 class QTextEdit;
 QT_END_NAMESPACE
 
+class Logger;
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -23,6 +25,9 @@ private:
     void initUI();       // 初始化界面
     void initConnect();  // 初始化信号槽连接
     void initData();     // 初始化数据、加载配置
+
+private slots:
+    void onLogMessage(const QString &formattedMsg,int level);//接受日志消息，前置什么无法访问类内部的枚举，用int做桥梁
 
 private:
     QSplitter   *m_mainSplitter = nullptr; //主分割器(上下分割)
