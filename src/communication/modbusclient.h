@@ -58,7 +58,7 @@ private slots:
     void doPoll();//执行一次轮询
 
 private:
-    QModbusTcpClient *m_modbusClient = nullptr;
+    QModbusTcpClient *m_modbusClient = nullptr;//子对象QModbusTcpClient
     QTimer           *m_pollTimer    = nullptr;
 
     QString m_ip;

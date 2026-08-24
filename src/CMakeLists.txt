@@ -15,6 +15,7 @@ qt_add_executable(${PROJECT_NAME}
     core/logger.h
     core/logger.cpp
     communication/modbusclient.h
+    communication/modbusclient.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}
