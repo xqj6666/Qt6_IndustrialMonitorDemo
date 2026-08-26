@@ -17,10 +17,12 @@ Logger::~Logger()
     if(m_stream){
         m_stream->flush();//把缓冲区残留日志强制刷入磁盘，防止程序退出日志丢在内存没写入硬盘
         delete m_stream;
+        m_stream = nullptr;//如果析构之后有人意外访问此指针，置nullptr可以让程序奔溃在明确的位置，而不是随机崩溃
     }
     if(m_logFile){
         m_logFile->close();//关闭磁盘文件句柄
         delete m_logFile;
+        m_logFile = nullptr;
     }
 }
 
@@ -100,6 +102,14 @@ QString Logger::levelToString(Level level) const
     }
     return "UNKNOWN";
 }
+
+//用QMetaEnum进行转换，后续添加枚举值不用修改函数，但是没有上面的函数可读性好
+//QString Logger::levelToString(Level level) const
+//{
+//    const QMetaEnum meta = QMetaEnum::fromType<Level>();
+//   const char *key = meta.valueToKey(static_cast<int>(level));
+//    return key ? QString(key) : QStringLiteral("UNKNOWN");
+//}
 
 
 

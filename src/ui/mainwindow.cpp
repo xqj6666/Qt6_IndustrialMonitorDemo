@@ -3,24 +3,40 @@
 #include "pages/chartpage.h"
 #include "pages/configpage.h"
 #include "core/logger.h"
+#include "communication/modbusclient.h"
 
 #include <QTabWidget>
 #include <QStatusBar>
 #include <QLabel>
 #include <QSplitter>
 #include <QTextEdit>
+#include <QThread>
+#include <QMetaType>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
+    //注册自定义类型，让信号槽跨线程传递时Qt能识别
+    qRegisterMetaType<ModbusClient::DeviceState>("ModbusClient::DeviceState");
+
     initUI();
+    initCommunication();//如果initConnect先调用,对于m_modbusClient的连接会有空指针崩溃
     initConnect();
     initData();
 }
 
 MainWindow::~MainWindow()
 {
-    // 对象树自动析构，这里一般不需要手动 delete
+    //先通知ModbusClient停止工作
+    emit requestDisconnect();
+
+    //停止子线程
+    if(m_commThread)
+    {
+        m_commThread->quit();//退出事件循环
+        m_commThread->wait();//等待子线程真正结束
+    }
+    //m_modbusClient已经通过finished->deleteLater被销毁
 }
 
 void MainWindow::initUI()
@@ -68,6 +84,58 @@ void MainWindow::initConnect()
     connect(Logger::instance(),&Logger::logMessageReady,this,[this](const QString &msg, Logger::Level level){
         onLogMessage(msg,static_cast<int>(level));
     });//信号发送的是枚举类型，槽函数接收的是int，需要进行转换
+
+    //---通信层信号(MainWindow -> ModbusClient,跨线程)---
+    connect(this, &MainWindow::requestConnect,m_modbusClient,&ModbusClient::connectToDevice);
+    connect(this, &MainWindow::requestDisconnect,m_modbusClient,&ModbusClient::disconnectDevice);
+    connect(this,&MainWindow::requestStartPolling,m_modbusClient,&ModbusClient::startPolling);
+    connect(this,&MainWindow::requestStopPolling,m_modbusClient,&ModbusClient::stopPolling);
+
+    //---通信层型号(ModbusClient->MainWindow，跨线程)
+    connect(m_modbusClient, &ModbusClient::deviceStateChanged,
+            this, [this](ModbusClient::DeviceState state, const QString &ip, quint16 port) {
+                onDeviceStateChanged(static_cast<int>(state), ip, port);
+            });//信号传的是ModbusClient::DeviceStae,槽接收的是int，编译期类型不匹配，进行类型转换
+    connect(m_modbusClient,&ModbusClient::registerDataReady,this,[this](int startAddr,const QVector<quint16> &values)
+    {//TODO：后面介入MonitorPage更新表格
+        Q_UNUSED(startAddr);
+        Q_UNUSED(values);
+    });
+    connect(m_modbusClient,&ModbusClient::errorOccurred,this,[](const QString &errorMsg)
+    {
+        Logger::error(errorMsg);
+    });
+
+    //---ModbusClient日志型号转发给Logger---
+    connect(m_modbusClient,&ModbusClient::logMessage,Logger::instance(),[this](const QString &msg,int level)
+    {
+        //根据level调用对应Logger静态函数
+        switch (static_cast<Logger::Level>(level))
+        {
+        case Logger::Level::Debug:      Logger::debug(msg);     break;
+        case Logger::Level::Info:       Logger::info(msg);      break;
+        case Logger::Level::Warning:    Logger::warning(msg);   break;
+        case Logger::Level::Error:      Logger::error(msg);     break;
+        }
+    });
+}
+
+void MainWindow::initCommunication()//多线程
+{
+    //创建通信子线程
+    m_commThread = new QThread(this);
+
+    //创建ModbusClient,不要指定parent,有parent的对象无法moveToThread,指定parent为nullptr可以吗？？？
+    m_modbusClient = new ModbusClient();
+
+    //把ModbusClient搬到子线程
+    m_modbusClient->moveToThread(m_commThread);
+
+    //线程结束后自动销毁ModbusClient
+    connect(m_commThread,&QThread::finished,m_modbusClient,&QObject::deleteLater);
+
+    //启动子线程
+    m_commThread->start();
 }
 
 void MainWindow::initData()
@@ -75,6 +143,28 @@ void MainWindow::initData()
     //程序启动日志
     Logger::info("程序启动");
     Logger::info("界面初始化完成");
+}
+
+void MainWindow::onDeviceStateChanged(int state,const QString &ip,quint16 port)
+{
+    switch(static_cast<ModbusClient::DeviceState>(state))
+    {
+    case ModbusClient::DeviceState::Disconnected:
+        m_statusLabel->setText(QString("已断开"));
+        Logger::warning(QString("设备断开：%1:%2").arg(ip).arg(port));
+        break;
+    case ModbusClient::DeviceState::Connecting:
+        m_statusLabel->setText(QString("连接中：%1:%2").arg(ip).arg(port));
+        break;
+    case ModbusClient::DeviceState::Connected:
+        m_statusLabel->setText(QString("已连接：%1:%2").arg(ip).arg(port));
+        Logger::info(QString("设备连接成功：%1:%2").arg(ip).arg(port));
+        break;
+    case ModbusClient::DeviceState::Error:
+        m_statusLabel->setText("连接异常");
+        Logger::error(QString("设备连接异常：%1:%2").arg(ip).arg(port));
+        break;
+    }
 }
 
 void MainWindow::onLogMessage(const QString &formattedMsg, int level)

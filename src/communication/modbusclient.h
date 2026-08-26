@@ -59,7 +59,7 @@ private slots:
 
 private:
     QModbusTcpClient *m_modbusClient = nullptr;//子对象QModbusTcpClient
-    QTimer           *m_pollTimer    = nullptr;
+    QTimer           *m_pollTimer    = nullptr;//轮询计时器
 
     QString m_ip;
     quint16 m_port          = 0;
