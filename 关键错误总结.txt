@@ -1,0 +1,6 @@
+1.多线程：在MainWindow在主线程创建ModbusClient对象时，也创建了成员对象QModbusTcpClient和QTimer，
+当ModbusClient对象moveToThread的时候，在主线程创建的QModbusTcpClient和QTimer对象还线程亲和性还是主线程
+当子线程调用connectToDevice()使，QModbusTcpClient内部创建QTcpSocket作为子对象，Qt发现父对象的线程亲和性和当前线程不一致，就报错
+
+解决方案：1.延迟创建QModbusTcpClient和QTimer,等ModbusClient搬到子线程之后再创建
+	2.把三个对象同时搬到子线程不就行了？

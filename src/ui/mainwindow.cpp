@@ -12,12 +12,14 @@
 #include <QTextEdit>
 #include <QThread>
 #include <QMetaType>
+#include <QTimer>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     //注册自定义类型，让信号槽跨线程传递时Qt能识别
-    qRegisterMetaType<ModbusClient::DeviceState>("ModbusClient::DeviceState");
+    qRegisterMetaType<ModbusClient::DeviceState>("ModbusClient::DeviceState");//在ModbusClient中可不可以注册日志的自定义类型呢？？？什么时候需要注册
+    qRegisterMetaType<QVector<quint16>>("QVector<quint16>");
 
     initUI();
     initCommunication();//如果initConnect先调用,对于m_modbusClient的连接会有空指针崩溃
@@ -51,10 +53,14 @@ void MainWindow::initUI()
     //-----上半部分:Tab多页面容器-----
     m_tabWidget = new QTabWidget(m_mainSplitter);
     m_mainSplitter->addWidget(m_tabWidget);
-    m_tabWidget->addTab(new MonitorPage(m_tabWidget),"设备监控");
-    m_tabWidget->addTab(new ChartPage(m_tabWidget),"数据曲线");
-    m_tabWidget->addTab(new ConfigPage(m_tabWidget),"参数配置");
+    //保存页面指针，后面connect要用
+    m_monitorPage = new MonitorPage(m_tabWidget);
+    m_configPage  = new ConfigPage(m_tabWidget);
+    m_chartPage   = new ChartPage(m_chartPage);
 
+    m_tabWidget->addTab(m_monitorPage,"设备监控");
+    m_tabWidget->addTab(m_chartPage,"数据曲线");
+    m_tabWidget->addTab(m_configPage,"参数配置");
 
     //-----下半部分：日志显示区域-----
     m_logView = new QTextEdit(m_mainSplitter);
@@ -78,9 +84,29 @@ void MainWindow::initUI()
     statusBar()->addPermanentWidget(m_statusLabel);
 }
 
+void MainWindow::initCommunication()//多线程
+{
+    //创建通信子线程
+    m_commThread = new QThread(this);
+    m_modbusClient = new ModbusClient();
+
+    //现成启动后,触发ModbusClient::init()在子线程里创建对象
+    connect(m_commThread, &QThread::started, m_modbusClient, &ModbusClient::init);
+
+    //把ModbusClient搬到子线程
+    m_modbusClient->moveToThread(m_commThread);
+
+    //线程结束后自动销毁ModbusClient
+    connect(m_commThread,&QThread::finished,m_modbusClient,&QObject::deleteLater);
+
+    //启动子线程
+    m_commThread->start();
+}
+
+
 void MainWindow::initConnect()
 {
-    //连接日志信号到日志显示的槽函数
+    //日志信号
     connect(Logger::instance(),&Logger::logMessageReady,this,[this](const QString &msg, Logger::Level level){
         onLogMessage(msg,static_cast<int>(level));
     });//信号发送的是枚举类型，槽函数接收的是int，需要进行转换
@@ -100,6 +126,7 @@ void MainWindow::initConnect()
     {//TODO：后面介入MonitorPage更新表格
         Q_UNUSED(startAddr);
         Q_UNUSED(values);
+        m_monitorPage->onRegisterDataReady(startAddr, values);
     });
     connect(m_modbusClient,&ModbusClient::errorOccurred,this,[](const QString &errorMsg)
     {
@@ -118,24 +145,19 @@ void MainWindow::initConnect()
         case Logger::Level::Error:      Logger::error(msg);     break;
         }
     });
-}
 
-void MainWindow::initCommunication()//多线程
-{
-    //创建通信子线程
-    m_commThread = new QThread(this);
+    //---MonitorPage按钮信号 -> MainWindow槽函数---  一般在什么地方连接信号和槽，只要inclue就行吗？？？
+    connect(m_monitorPage, &MonitorPage::connectRequested, this, &MainWindow::onConnectRequested);
+    connect(m_monitorPage, &MonitorPage::disconnectRequested, this, &MainWindow::onDisconnectRequested);
 
-    //创建ModbusClient,不要指定parent,有parent的对象无法moveToThread,指定parent为nullptr可以吗？？？
-    m_modbusClient = new ModbusClient();
-
-    //把ModbusClient搬到子线程
-    m_modbusClient->moveToThread(m_commThread);
-
-    //线程结束后自动销毁ModbusClient
-    connect(m_commThread,&QThread::finished,m_modbusClient,&QObject::deleteLater);
-
-    //启动子线程
-    m_commThread->start();
+    //---MainWindow设备状态变化 -> MonitorPage 更新界面
+    connect(this, &MainWindow::requestConnect,this,[this](const QString &ip, quint16 port)
+    {
+        Q_UNUSED(ip);//什么意思???
+        Q_UNUSED(port);
+        //切换到设备监控页
+        m_tabWidget->setCurrentWidget(m_monitorPage);
+    });
 }
 
 void MainWindow::initData()
@@ -145,8 +167,12 @@ void MainWindow::initData()
     Logger::info("界面初始化完成");
 }
 
+
 void MainWindow::onDeviceStateChanged(int state,const QString &ip,quint16 port)
 {
+    //转发给MonitorPage 更新指示灯和按钮状态
+    m_monitorPage->onDeviceStateChanged(state, ip, port);
+
     switch(static_cast<ModbusClient::DeviceState>(state))
     {
     case ModbusClient::DeviceState::Disconnected:
@@ -191,6 +217,34 @@ void MainWindow::onLogMessage(const QString &formattedMsg, int level)
     QTextCursor cursor = m_logView->textCursor();
     cursor.movePosition(QTextCursor::End);
     m_logView->setTextCursor(cursor);
+}
+
+void MainWindow::onConnectRequested()
+{
+    //从ConfigPage读取配置参数
+    QString ip      = m_configPage->ipAddress();
+    quint16 port    = m_configPage->port();
+    int interval    = m_configPage->pollInterval();
+
+    Logger::info(QString("用户发起连接：%1:%2，轮询周期：%3ms").arg(ip).arg(port).arg(interval));
+
+    //发信号给子线程的ModbusClient
+    emit requestConnect(ip, port);
+
+    //连接成功后自动启动轮询,延迟500ms，等连接建立后再启动轮询,doPoll里有是否连接的前置检查。
+    //connectDevice是异步的，如果还没有连接就开始轮询会浪费轮询次数
+    QTimer::singleShot(500, this, [this, interval](){
+        emit requestStartPolling(interval, 0, 10);
+    });
+}
+
+void MainWindow::onDisconnectRequested()
+{
+    Logger::info("用户发起断开连接");
+
+    //先停止轮询,再断开连接
+    emit requestStopPolling();
+    emit requestDisconnect();
 }
 
 

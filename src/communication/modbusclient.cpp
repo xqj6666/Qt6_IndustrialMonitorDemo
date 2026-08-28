@@ -8,21 +8,20 @@
 ModbusClient::ModbusClient(QObject *parent)
     :QObject(parent)
 {
-    //使用构造函数的时候不要指定parent
-    //有parent的对象无法moveToThread
+
+}
+
+void ModbusClient::init()
+{
+    //这个函数在子线程里执行，通过connect QThred::started触发
+    //此时对象已经在子线程中，创建的子对象线程亲和性也是子线程
     m_modbusClient = new QModbusTcpClient();
 
-    //创建轮询定时器
-    //同样不指定parent,定时器会在子线程工作
     m_pollTimer = new QTimer();
-    m_pollTimer->setSingleShot(false);//周期触发
-
-    //---连接ModbusTcpClient内部信号---？？？头文件中好像没有定义
-    //设备状态变化信号
+    m_pollTimer->setSingleShot(false);
+    //---ModbusTcpClient内部信号连接ModbusClient的三个内部槽---
     connect(m_modbusClient,&QModbusTcpClient::stateChanged,this,&ModbusClient::onStateChanged);
-    //设备内部错误信号
     connect(m_modbusClient,&QModbusTcpClient::errorOccurred,this,&ModbusClient::onDeviceError);
-    //连接轮询定时器
     connect(m_pollTimer,&QTimer::timeout,this,&ModbusClient::doPoll);
 }
 
@@ -33,24 +32,22 @@ ModbusClient::~ModbusClient()
         m_pollTimer->stop();
     }
 
-    //断开Modbus 设备连接
+    //断开Modbus设备TCP连接
     if(m_modbusClient){
         if(m_modbusClient->state() != QModbusDevice::UnconnectedState){
             m_modbusClient->disconnectDevice();
         }
-        m_modbusClient->deleteLater();//用deleteLater避免子线程析构问题
+        m_modbusClient->deleteLater();
     }
-
+    //已经停止，可以直接delete
     if(m_pollTimer){
         delete m_pollTimer;
         m_pollTimer = nullptr;
     }
 }
 
-//连接设备ip和端口，Modbus-TCP默认端口502
-void ModbusClient::connectToDevice(const QString &ip,quint16 port)//为什么端口号要用quint16？？
+void ModbusClient::connectToDevice(const QString &ip,quint16 port)
 {
-    //保存连接参数，后面断线重连用
     m_ip = ip;
     m_port = port;
 
@@ -60,82 +57,78 @@ void ModbusClient::connectToDevice(const QString &ip,quint16 port)//为什么端
     }
 
     //设置连接参数
-    m_modbusClient->setConnectionParameter(QModbusDevice::NetworkAddressParameter, ip);//QVariant类型???
+    m_modbusClient->setConnectionParameter(QModbusDevice::NetworkAddressParameter, ip);
     m_modbusClient->setConnectionParameter(QModbusDevice::NetworkPortParameter,port);
 
-    //设置超时时间3000s
+    //设置超时时间3000ms,常规合理时间
     m_modbusClient->setTimeout(3000);
-    //重试次数3次
+    //重试次数3次，最多四次，初始1次+重试3次
     m_modbusClient->setNumberOfRetries(3);
-    //发起异步连接，不阻塞。连接成功后触发stateChanged型号->onStateChanged槽
+    //发起异步连接，不阻塞。连接成功后触发stateChanged信号->onStateChanged槽
+    //内部封装了Socket和TCP握手等代码
     m_modbusClient->connectDevice();
-    //通知UI:正在连接中
+
     emit deviceStateChanged(DeviceState::Connecting,m_ip,m_port);
-    emit logMessage(QString("正在连接设备 %1:%2 ...").arg(ip).arg(port),1);// 1=Info
+    //通知UI正在建立连接
+    emit logMessage(QString("正在连接设备 %1:%2 ...").arg(ip).arg(port),LOG_INFO);
 }
 
-//断开连接
 void ModbusClient::disconnectDevice()
 {
-    //先停止轮询
+    //先停止轮询，否则在断开的连接上发请求，行为不可预测
     stopPolling();
     //断开Modbus设备
     if(m_modbusClient->state() != QModbusDevice::UnconnectedState){
         m_modbusClient->disconnectDevice();
     }
 
-    emit logMessage("主动断开设备连接",1);//1=Info
+    emit logMessage("主动断开设备连接",LOG_INFO);
 }
 
-//启动轮询(毫秒，起始寄存器地址，读取寄存器数量)
 void ModbusClient::startPolling(int intervalMs, int startAddr, int registerCount)
 {
-    //保存轮询参数
+    //保存轮询参数，doPoll()执行时会读取这些值
     m_startAddr = startAddr;
     m_registerCount = registerCount;
 
-    //设置定时器间隔
     m_pollTimer->setInterval(intervalMs);
-
-    //启动定时器
     m_pollTimer->start();
 
     emit logMessage(QString("启动轮询：间隔=%1ms,起始地址=0x%2,数量=%3")
                         .arg(intervalMs)
                         .arg(startAddr,4,16,QChar('0'))
                         .arg(registerCount),
-                    1);//1=Info为什么不直接写Info？？？
+                    LOG_INFO);
 }
 
-//停止轮询
 void ModbusClient::stopPolling()
 {
     if(m_pollTimer->isActive()){
         m_pollTimer->stop();
-        emit logMessage("停止轮询",1);//1=Info  为什么没有引用logger也能发logMessage信号？？？
+        emit logMessage("停止轮询",LOG_INFO);
     }
 }
 
-//当连接状态变化时，自动调用，内部槽是什么意思???
+//当连接状态变化时，自动调用
 void ModbusClient::onStateChanged(QModbusDevice::State state)
 {
     switch(state)
     {
-    case QModbusDevice::UnconnectedState://设备断开
+    case QModbusDevice::UnconnectedState:
         emit deviceStateChanged(DeviceState::Disconnected,m_ip,m_port);
-        emit logMessage("设备已断开",2);//2=Warning  什么情况下枚举可以直接隐式转换成数字????
+        emit logMessage("设备已断开",LOG_WARNING );
         break;
 
-    case QModbusDevice::ConnectingState://正在连接中
+    case QModbusDevice::ConnectingState:
         emit deviceStateChanged(DeviceState::Connecting,m_ip,m_port);
         break;
 
-    case QModbusDevice::ConnectedState://连接成功
+    case QModbusDevice::ConnectedState:
         emit deviceStateChanged(DeviceState::Connected,m_ip,m_port);
-        emit logMessage(QString("设备连接成功 %1%2").arg(m_ip).arg(m_port),1);//1=Info
+        emit logMessage(QString("设备连接成功: %1%2").arg(m_ip).arg(m_port),LOG_INFO);
         break;
 
-    case QModbusDevice::ClosingState://正在关闭连接
+    case QModbusDevice::ClosingState:
         break;
     }
 }
@@ -149,9 +142,9 @@ void ModbusClient::onDeviceError(QModbusDevice::Error error)
     //获取错误描述文本
     QString errorMsg = m_modbusClient->errorString();
     emit errorOccurred(errorMsg);
-    emit logMessage("Modbus错误：" + errorMsg, 3);//3=Error
+    emit logMessage("Modbus错误：" + errorMsg, LOG_ERROR);
 
-    //如果是连接错误，通知UI状态变成Error
+    //如果是连接错误，向主线程发送错误信号
     if(error == QModbusDevice::ConnectionError)
     {
         emit deviceStateChanged(DeviceState::Error,m_ip,m_port);
@@ -164,6 +157,7 @@ void ModbusClient::doPoll()
     //前置检查:如果设备未链接，不发请求
     if(m_modbusClient->state() != QModbusDevice::ConnectedState)
     {
+        emit logMessage("设备未连接，跳过轮询", LOG_WARNING);
         return;
     }
 
@@ -183,9 +177,10 @@ void ModbusClient::doPoll()
     if(!reply)
     {
         //发送失败，可能链接已断开或者内部错误
-        emit logMessage("发送请求失败",3);//3=Error
+        emit logMessage("发送请求失败",LOG_ERROR);
         return;
     }
+
 
     //异步等待响应：当设备返回数据时，reply的finished信号会触发
     connect(reply, &QModbusReply::finished, this, [this, reply]()
@@ -193,10 +188,11 @@ void ModbusClient::doPoll()
         //检查reply是否有错误
         if(reply->error() != QModbusDevice::NoError)
         {
-            emit logMessage("读取失败：" + reply->errorString(),3);//3=Error
+            emit logMessage("读取失败：" + reply->errorString(),LOG_ERROR);
             reply->deleteLater();//用完必须deleteLater,否则内存泄露
             return;
         }
+
 
         //解析返回数据，result()返回QModbusDataUnit，包含寄存器数据
         QModbusDataUnit unit = reply->result();
