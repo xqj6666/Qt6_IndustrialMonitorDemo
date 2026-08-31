@@ -17,6 +17,11 @@ static constexpr int LOG_INFO    = 1;
 static constexpr int LOG_WARNING = 2;
 static constexpr int LOG_ERROR   = 3;
 
+//最大重连次数
+static constexpr int MAX_RECONNECT_ATTEMPTS = 3;
+//重连间隔毫秒
+static constexpr int RECONNECT_INTERVAL_MS  = 3000;
+
 class ModbusClient : public QObject
 {
     Q_OBJECT
@@ -49,45 +54,28 @@ signals:
     void registerDataReady(int startAddr,const QVector<quint16> &values);
     void errorOccurred(const QString &errorMsg);
     void logMessage(const QString &msg, int level);
+    void reconnectedFaild(const QString &ip, quint16 port);//重连失败后交给mainwindow处理
 
 private slots:
     //---内部槽,在子线程中执行---
     void onStateChanged(QModbusDevice::State state);
     void onDeviceError(QModbusDevice::Error error);
     void doPoll();
+    void doReconnect();//重连定时器超时执行一次重连
 
 private:
-    QModbusTcpClient *m_modbusClient = nullptr;//真正底层干活的对象：TCP spcket ModbusTCP报文
+    QModbusTcpClient *m_modbusClient = nullptr;//真正底层干活的对象：TCP socket ModbusTCP报文
     QTimer           *m_pollTimer    = nullptr;
 
     QString m_ip;
     quint16 m_port          = 0;
     int     m_startAddr     = 0;
     int     m_registerCount = 10;
+
+    //标志是否是用户点击的断开连接
+    bool    m_userDisconnected = false;
+    QTimer  *m_reconnectTimer  = nullptr;
+    int     m_reconnectAttempts = 0;  //当前已重连次数
 };
 
 #endif // MODBUSCLIENT_H
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
