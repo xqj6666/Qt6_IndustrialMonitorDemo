@@ -1,3 +1,4 @@
+//===主窗口界面===
 #include "mainwindow.h"
 #include "pages/monitorpage.h"
 #include "pages/chartpage.h"
@@ -6,11 +7,13 @@
 #include "communication/modbusclient.h"
 
 #include <QTabWidget>
+//不要自己new QStatusBar，QMainWindow内置示例，直接调用statusBar()
 #include <QStatusBar>
 #include <QLabel>
 #include <QSplitter>
 #include <QTextEdit>
 #include <QThread>
+//属于Qt元对象系统，让Qt信号-槽、QVariant可以自定义识别数据类型
 #include <QMetaType>
 #include <QTimer>
 
@@ -18,11 +21,13 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     //注册自定义类型，让信号槽跨线程传递时Qt能识别
-    qRegisterMetaType<ModbusClient::DeviceState>("ModbusClient::DeviceState");//在ModbusClient中可不可以注册日志的自定义类型呢？？？什么时候需要注册
+    //mainwindow天然include了modbusclient，所以信号不再传递int，而是直接传递ModbusClient::DeviceState，语义清晰
+    qRegisterMetaType<ModbusClient::DeviceState>("ModbusClient::DeviceState");
     qRegisterMetaType<QVector<quint16>>("QVector<quint16>");
 
     initUI();
-    initCommunication();//如果initConnect先调用,对于m_modbusClient的连接会有空指针崩溃
+    //如果initConnect先调用,对于m_modbusClient的连接会有空指针崩溃
+    initCommunication();
     initConnect();
     initData();
 }
@@ -38,7 +43,6 @@ MainWindow::~MainWindow()
         m_commThread->quit();//退出事件循环
         m_commThread->wait();//等待子线程真正结束
     }
-    //m_modbusClient已经通过finished->deleteLater被销毁
 }
 
 void MainWindow::initUI()
@@ -81,10 +85,11 @@ void MainWindow::initUI()
 
     //-----状态栏-----
     m_statusLabel = new QLabel("就绪",this);
+    //直接通过statusBar调用函数，改变最下方的状态栏
     statusBar()->addPermanentWidget(m_statusLabel);
 }
 
-void MainWindow::initCommunication()//多线程
+void MainWindow::initCommunication()
 {
     //创建通信子线程
     m_commThread = new QThread(this);
@@ -106,58 +111,61 @@ void MainWindow::initCommunication()//多线程
 
 void MainWindow::initConnect()
 {
-    //日志信号
-    connect(Logger::instance(),&Logger::logMessageReady,this,[this](const QString &msg, Logger::Level level){
-        onLogMessage(msg,static_cast<int>(level));
-    });//信号发送的是枚举类型，槽函数接收的是int，需要进行转换
+    // ===== Logger单例 -> MainWindow：接收日志消息 =====
+    connect(Logger::instance(), &Logger::logMessageReady, this,
+            [this](const QString &msg, Logger::Level level) {
+                onLogMessage(msg, static_cast<int>(level));
+            });
 
-    //---通信层信号(MainWindow -> ModbusClient,跨线程)---
-    connect(this, &MainWindow::requestConnect,m_modbusClient,&ModbusClient::connectToDevice);
-    connect(this, &MainWindow::requestDisconnect,m_modbusClient,&ModbusClient::disconnectDevice);
-    connect(this,&MainWindow::requestStartPolling,m_modbusClient,&ModbusClient::startPolling);
-    connect(this,&MainWindow::requestStopPolling,m_modbusClient,&ModbusClient::stopPolling);
+    // ===== MainWindow -> ModbusClient：下发操作命令 原生connect优先 =====
+    connect(this, &MainWindow::requestConnect,        m_modbusClient, &ModbusClient::connectToDevice);
+    connect(this, &MainWindow::requestDisconnect,     m_modbusClient, &ModbusClient::disconnectDevice);
+    connect(this, &MainWindow::requestStartPolling,   m_modbusClient, &ModbusClient::startPolling);
+    connect(this, &MainWindow::requestStopPolling,    m_modbusClient, &ModbusClient::stopPolling);
 
-    //---通信层型号(ModbusClient->MainWindow，跨线程)
-    connect(m_modbusClient, &ModbusClient::deviceStateChanged,
-            this, [this](ModbusClient::DeviceState state, const QString &ip, quint16 port) {
+    // ===== ModbusClient -> MainWindow：上报状态、寄存器数据、错误 =====
+    // 设备状态变更，枚举转int
+    connect(m_modbusClient, &ModbusClient::deviceStateChanged, this,
+            [this](ModbusClient::DeviceState state, const QString &ip, quint16 port) {
                 onDeviceStateChanged(static_cast<int>(state), ip, port);
-            });//信号传的是ModbusClient::DeviceStae,槽接收的是int，编译期类型不匹配，进行类型转换
-    connect(m_modbusClient,&ModbusClient::registerDataReady,this,[this](int startAddr,const QVector<quint16> &values)
-    {//TODO：后面介入MonitorPage更新表格
-        Q_UNUSED(startAddr);
-        Q_UNUSED(values);
-        m_monitorPage->onRegisterDataReady(startAddr, values);
-    });
-    connect(m_modbusClient,&ModbusClient::errorOccurred,this,[](const QString &errorMsg)
-    {
-        Logger::error(errorMsg);
-    });
+            });
 
-    //---ModbusClient日志型号转发给Logger---
-    connect(m_modbusClient,&ModbusClient::logMessage,Logger::instance(),[this](const QString &msg,int level)
-    {
-        //根据level调用对应Logger静态函数
-        switch (static_cast<Logger::Level>(level))
-        {
-        case Logger::Level::Debug:      Logger::debug(msg);     break;
-        case Logger::Level::Info:       Logger::info(msg);      break;
-        case Logger::Level::Warning:    Logger::warning(msg);   break;
-        case Logger::Level::Error:      Logger::error(msg);     break;
-        }
-    });
+    // 寄存器数据上报，中转到MonitorPage，增加空指针保护
+    connect(m_modbusClient, &ModbusClient::registerDataReady, this,
+            [this](int startAddr, const QVector<quint16> &values) {
+                if (!m_monitorPage) return;
+                m_monitorPage->onRegisterDataReady(startAddr, values);
+            });
 
-    //---MonitorPage按钮信号 -> MainWindow槽函数---  一般在什么地方连接信号和槽，只要inclue就行吗？？？
-    connect(m_monitorPage, &MonitorPage::connectRequested, this, &MainWindow::onConnectRequested);
+    // Modbus错误，转发日志静态接口
+    connect(m_modbusClient, &ModbusClient::errorOccurred, this,
+            [](const QString &errorMsg) {
+                Logger::error(errorMsg);
+            });
+
+    // ===== ModbusClient -> Logger：modbus内部日志消息转发 =====
+    connect(m_modbusClient, &ModbusClient::logMessage, this,
+            [](const QString &msg, int level) {
+                switch (static_cast<Logger::Level>(level))
+                {
+                case Logger::Level::Debug:      Logger::debug(msg);     break;
+                case Logger::Level::Info:       Logger::info(msg);      break;
+                case Logger::Level::Warning:    Logger::warning(msg);   break;
+                case Logger::Level::Error:      Logger::error(msg);     break;
+                }
+            });
+
+    // ===== MonitorPage -> MainWindow：页面按钮操作向上通知主窗口 =====
+    connect(m_monitorPage, &MonitorPage::connectRequested,    this, &MainWindow::onConnectRequested);
     connect(m_monitorPage, &MonitorPage::disconnectRequested, this, &MainWindow::onDisconnectRequested);
 
-    //---MainWindow设备状态变化 -> MonitorPage 更新界面
-    connect(this, &MainWindow::requestConnect,this,[this](const QString &ip, quint16 port)
-    {
-        Q_UNUSED(ip);//什么意思???
-        Q_UNUSED(port);
-        //切换到设备监控页
-        m_tabWidget->setCurrentWidget(m_monitorPage);
-    });
+    // ===== MainWindow -> UI页面联动：收到连接请求自动切换监控tab页 =====
+    connect(this, &MainWindow::requestConnect, this,
+            [this](const QString &ip, quint16 port) {
+                Q_UNUSED(ip);
+                Q_UNUSED(port);
+                m_tabWidget->setCurrentWidget(m_monitorPage);
+            });
 }
 
 void MainWindow::initData()

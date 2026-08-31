@@ -1,3 +1,4 @@
+//===指示灯类：用于直观展示设备的连接状态===
 #ifndef INDICATORLIGHT_H
 #define INDICATORLIGHT_H
 
@@ -22,10 +23,13 @@ public:
     void setState(LightState state);
     LightState state() const;
 
-    void setDiameter(int deameter);//集合参数用直径，计算居中位置方便
+    //集合参数用直径，计算居中位置方便
+    void setDiameter(int diameter);
     //QWidget最小尺寸提示，让布局管理器知道这个控件需要多大
-    QSize sizeHint() const override;//告诉布局管理器理想尺寸
-    QSize minimumSizeHint() const override;//告诉布局管理器最小尺寸
+    //告诉布局管理器理想尺寸
+    QSize sizeHint() const override;
+    //告诉布局管理器最小尺寸
+    QSize minimumSizeHint() const override;
 
 protected:
     void paintEvent(QPaintEvent *event) override;//protected和基类保持一致

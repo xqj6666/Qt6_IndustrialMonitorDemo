@@ -1,3 +1,4 @@
+//===设备监控页面：显示连接情况和寄存器数据===
 #ifndef MONITORPAGE_H
 #define MONITORPAGE_H
 
@@ -10,7 +11,8 @@ class QTableWidget;
 class QPushButton;
 QT_END_NAMESPACE
 
-class IndicatorLight;//自定义控件，不在Qt命名空间
+//自定义指示灯控件，不在Qt命名空间
+class IndicatorLight;
 
 class MonitorPage : public QWidget
 {
@@ -22,14 +24,13 @@ public:
     ~MonitorPage() override;
 
 signals:
-    //通知MainWindow发起连接或断开
+    //信号链路：monitorpage->mainwindow->跨线程modbusclient
     void connectRequested();
     void disconnectRequested();
 
 public slots:
-    //由MainWindow调用，更新设备状态
+    //数据链路：modbusclient->mainwindow->monitorpage
     void onDeviceStateChanged(int state, const QString &ip, quint16 port);
-    //更新寄存器数据
     void onRegisterDataReady(int startAddr, const QVector<quint16> &values);
 
 private:

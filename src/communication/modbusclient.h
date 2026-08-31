@@ -36,7 +36,7 @@ public:
     Q_ENUM(DeviceState)
 
 public slots:
-    //主线程不能直接安全的调用子线程的函数，所以要通过信号进行调用
+    //---mainwindow -> modbusclient
     void init();//初始化，在子线程中执行
     void connectToDevice(const QString &ip, quint16 port);
     void disconnectDevice();
@@ -44,7 +44,7 @@ public slots:
     void stopPolling();
 
 signals:
-    //---发给主线程的信号---
+    //---modbusclient -> mainwindow---
     void deviceStateChanged(ModbusClient::DeviceState state,const QString &ip,quint16 port);
     void registerDataReady(int startAddr,const QVector<quint16> &values);
     void errorOccurred(const QString &errorMsg);

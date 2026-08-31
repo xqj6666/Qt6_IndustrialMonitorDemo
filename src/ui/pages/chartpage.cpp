@@ -1,3 +1,4 @@
+//===图表界面，把数据绘制成图表===
 #include "chartpage.h"
 
 #include <QLabel>

@@ -1,3 +1,4 @@
+//===设备监控页面：显示设备连接情况和寄存器数据===
 #include "monitorpage.h"
 #include "communication/modbusclient.h"
 #include "ui/widgets/indicatorlight.h"
@@ -5,6 +6,7 @@
 #include <QLabel>
 #include <QGroupBox>
 #include <QTableWidget>
+//表头视图
 #include <QHeaderView>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -25,7 +27,7 @@ MonitorPage::~MonitorPage()
 void MonitorPage::initUI()
 {
     auto *mainLayout = new QVBoxLayout(this);
-    //---第一部分：设备状态面板---
+    //---第一部分：设备状态面板：先把要用的组件全部new好，再加入布局，代码结构清晰---
     m_statusGroup = new QGroupBox("设备状态",this);
     auto *statusLayout = new QHBoxLayout(m_statusGroup);
 
@@ -68,6 +70,7 @@ void MonitorPage::initUI()
     m_tableGroup = new QGroupBox("寄存器数据",this);
     auto *tableLayout = new QVBoxLayout(m_tableGroup);
 
+    //表格，小数据量用QTableWidget，大数据量用QTableView + Model
     m_registerTable = new QTableWidget(m_tableGroup);
     m_registerTable->setColumnCount(4);
     m_registerTable->setHorizontalHeaderLabels({"序号","地址","名称","值"});
@@ -97,14 +100,15 @@ void MonitorPage::initUI()
 
 void MonitorPage::initConnect()
 {
-    //连接按钮->发信号给MainWindow
+    //信号链路:monitorpage->mainwindow->modbusclient
     connect(m_connectBtn, &QPushButton::clicked, this, &MonitorPage::connectRequested);
-    //断开按钮
     connect(m_disconnectBtn, &QPushButton::clicked, this, &MonitorPage::disconnectRequested);
 }
 
 void MonitorPage::onDeviceStateChanged(int state, const QString &ip, quint16 port)
 {
+    //信号链路：modbusclient->mainwindow->monitorpage
+    //强制类型转换把数字转换成设备状态
     switch(static_cast<ModbusClient::DeviceState>(state))
     {
     case ModbusClient::DeviceState::Disconnected:
@@ -145,6 +149,7 @@ void MonitorPage::onDeviceStateChanged(int state, const QString &ip, quint16 por
 
 void MonitorPage::onRegisterDataReady(int startAddr,const QVector<quint16> &values)
 {
+    //信号链路：modbusclient->mainwindow->monitorpage
     //把寄存器数据更新到表格的值列
     for(int i = 0; i<values.size(); ++i)
     {

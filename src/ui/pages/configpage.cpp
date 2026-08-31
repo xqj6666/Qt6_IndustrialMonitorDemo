@@ -1,3 +1,4 @@
+//===配置界面：配置持久化，读取和保存====
 #include "configpage.h"
 #include "core/logger.h"
 
@@ -9,7 +10,9 @@
 #include <QGridLayout>
 #include <QVBoxLayout>
 #include <QSettings>
+//核心基类，QApplication的父类:获取exe文件所在目录常用
 #include <QCoreApplication>
+//目录操作类
 #include <QDir>
 #include <QDebug>
 
@@ -33,7 +36,8 @@ QString ConfigPage::ipAddress() const
 
 quint16 ConfigPage::port() const
 {
-    return static_cast<quint16>(m_portSpin->value());//对于小众类型进行强制类型转换
+    //对于小众类型进行强制类型转换，SpinBox存储的是整数
+    return static_cast<quint16>(m_portSpin->value());
 }
 
 int ConfigPage::pollInterval() const
@@ -46,7 +50,7 @@ void ConfigPage::initUI()
     //-----外层垂直布局-----
     auto *mainLayout = new QVBoxLayout(this);
 
-    //-----分组框-----
+    //-----分组框（界面的分组与隔离带标题）-----
     auto *groupBox = new QGroupBox("Modbus-TCP 设备连接配置", this);
     auto *gridLayout = new QGridLayout(groupBox);
 
@@ -98,33 +102,35 @@ void ConfigPage::initConnect()
 void ConfigPage::loadConfig()
 {
     //配置文件路径：可执行文件同级目录/config/settings.ini
-    QString configPath = QCoreApplication::applicationDirPath()+"/config/settings.ini";//获取exe可执行文件目录进行拼接
-    QSettings settings(configPath,QSettings::IniFormat);//指定文件路径，使用ini文件格式
+    //获取exe文件路径并进行拼接得到配置文件目录
+    QString configPath = QCoreApplication::applicationDirPath()+"/config/settings.ini";
+    //指定文件路径，使用ini文件格式
+    QSettings settings(configPath,QSettings::IniFormat);
 
     //读取配置，如果不存在则使用默认配置
-    m_ipEdit->setText(settings.value("Connection/IP",DEFAULT_IP).toString());//读取键中的内容，第二个参数表示默认值
+    //读取键中的内容，第二个参数表示默认值
+    m_ipEdit->setText(settings.value("Connection/IP",DEFAULT_IP).toString());
     m_portSpin->setValue(settings.value("Connection/Port",DEFAULT_PORT).toInt());
     m_pollIntervalSpin->setValue(settings.value("Connection/PollInterval",DEFAULT_POLL_INTERVAL).toInt());
 
     qDebug()<<"配置已从"<<configPath<<"加载";
-    //QString log = "配置已从"+configPath+"加载";
-    //Logger::info("log");为什么刚开始不输出
 }
 
 void ConfigPage::saveConfig()
 {
-    //提前检测目录的可写性，如果没有权限就提醒用户
+    //提前检测目录的可写性，如果没有权限就提醒用户（待做）
 
     //确保配置目录存在
     QString configDir = QCoreApplication::applicationDirPath() + "/config";
     QDir dir(configDir);
-    if(!dir.exists()){dir.mkpath(configDir);}//如果config文件夹不存在，就创建这个文件夹
+    //如果config文件夹不存在，就创建这个文件夹
+    if(!dir.exists()){dir.mkpath(configDir);}
 
     QString configPath = configDir + "/settings.ini";
     QSettings settings(configPath,QSettings::IniFormat);//再次构造QSettings对象，指向ini文件
 
     //保存配置
-    settings.setValue("Connection/IP",m_ipEdit->text());//读取文件
+    settings.setValue("Connection/IP",m_ipEdit->text());
     settings.setValue("Connection/Port",m_portSpin->value());
     settings.setValue("Connection/PollInterval",m_pollIntervalSpin->value());
 

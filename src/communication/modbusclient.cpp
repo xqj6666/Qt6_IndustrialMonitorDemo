@@ -11,6 +11,7 @@ ModbusClient::ModbusClient(QObject *parent)
 
 }
 
+//===将mainwindow中的ModbusClient对象移入子线程之后，再创建ModbusClient的子对象，保证子对象的线程亲和性
 void ModbusClient::init()
 {
     //这个函数在子线程里执行，通过connect QThred::started触发
