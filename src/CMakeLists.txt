@@ -24,6 +24,13 @@ target_link_libraries(${PROJECT_NAME}
         Qt::Widgets
         Qt::Network
         Qt::SerialBus
+        Qt::PrintSupport
+        QCustomPlot
+)
+
+set_source_files_properties(
+    ui/widgets/qcustomplot.cpp
+    PROPERTIES COMPILE_FLAGS "-Wa,-mbig-obj"
 )
 
 target_include_directories(${PROJECT_NAME}

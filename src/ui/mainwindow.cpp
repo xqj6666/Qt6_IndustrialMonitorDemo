@@ -60,7 +60,7 @@ void MainWindow::initUI()
     //保存页面指针，后面connect要用
     m_monitorPage = new MonitorPage(m_tabWidget);
     m_configPage  = new ConfigPage(m_tabWidget);
-    m_chartPage   = new ChartPage(m_chartPage);
+    m_chartPage   = new ChartPage(m_tabWidget);
 
     m_tabWidget->addTab(m_monitorPage,"设备监控");
     m_tabWidget->addTab(m_chartPage,"数据曲线");
@@ -133,8 +133,12 @@ void MainWindow::initConnect()
     // 寄存器数据上报，中转到MonitorPage，增加空指针保护
     connect(m_modbusClient, &ModbusClient::registerDataReady, this,
             [this](int startAddr, const QVector<quint16> &values) {
-                if (!m_monitorPage) return;
-                m_monitorPage->onRegisterDataReady(startAddr, values);
+                if(m_monitorPage){
+                    m_monitorPage->onRegisterDataReady(startAddr, values);
+                }
+                if(m_chartPage){
+                    m_chartPage->onRegisterDataReady(startAddr, values);
+                }
             });
 
     // Modbus错误，转发日志静态接口
