@@ -9,6 +9,7 @@ class QLabel;
 class QSplitter;
 QT_END_NAMESPACE
 
+//轻量级第三方C++绘图库，相比QChart更轻量性能好
 class QCustomPlot;
 
 class ChartPage : public QWidget
@@ -35,6 +36,7 @@ private:
 
     static constexpr double TIME_WINDOW = 60.0;//显示最近60s
 
+    //多曲线索引追踪，用于报警时切换曲线颜色
     int m_lastTempGraphIndex = 0;//上一次温度数据属于哪条曲线
     int m_lastPressGraphIndex = 0;//上一次压力数据属于哪条曲线
 };

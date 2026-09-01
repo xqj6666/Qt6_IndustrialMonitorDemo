@@ -4,6 +4,7 @@
 
 #include <QSplitter>
 #include <QVBoxLayout>
+//获取Unix时间戳
 #include <QDateTime>
 
 ChartPage::ChartPage(QWidget *parent)
@@ -177,6 +178,8 @@ void ChartPage::onRegisterDataReady(int startAddr, const QVector<quint16> &value
     m_pressPlot->yAxis->rescale(true);
     m_pressPlot->replot();
 }
+
+
 
 
 

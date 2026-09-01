@@ -30,6 +30,9 @@ public:
     quint16 port()          const;
     int     pollInterval()  const;
 
+    //成功返回空字符，失败返回错误信息
+    QString validateInput() const;
+
 private:
     void initUI();
     void initConnect();

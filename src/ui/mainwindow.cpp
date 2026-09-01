@@ -16,6 +16,7 @@
 //属于Qt元对象系统，让Qt信号-槽、QVariant可以自定义识别数据类型
 #include <QMetaType>
 #include <QTimer>
+#include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -233,6 +234,14 @@ void MainWindow::onLogMessage(const QString &formattedMsg, int level)
 
 void MainWindow::onConnectRequested()
 {
+    //先校验ConfigPage的参数是否合法
+    QString error = m_configPage->validateInput();
+    if(!error.isEmpty()){
+        QMessageBox::warning(this, "参数错误", error);//这个弹窗会在父对象的中心出现，所以我们的validateInput()函数只校验是否合法，返回错误信息，让调用者自己去调用QMessageBox弹窗
+                                                    //校验与展示分离，谁的提供数据谁写校验函数，谁调用校验函数，谁弹窗
+        return;
+    }
+
     //从ConfigPage读取配置参数
     QString ip      = m_configPage->ipAddress();
     quint16 port    = m_configPage->port();

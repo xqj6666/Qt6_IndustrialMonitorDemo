@@ -15,6 +15,8 @@
 //目录操作类
 #include <QDir>
 #include <QDebug>
+#include <QMessageBox>
+#include <QHostAddress>
 
 ConfigPage::ConfigPage(QWidget *parent)
     :QWidget(parent)
@@ -113,12 +115,31 @@ void ConfigPage::loadConfig()
     m_portSpin->setValue(settings.value("Connection/Port",DEFAULT_PORT).toInt());
     m_pollIntervalSpin->setValue(settings.value("Connection/PollInterval",DEFAULT_POLL_INTERVAL).toInt());
 
+    // ---- 加载后校验，非法值用默认值替换 ----一打开程序就弹窗会破坏用户体验，所以出错就改成默认值
+    QHostAddress addr;
+    if (!addr.setAddress(m_ipEdit->text().trimmed())) {
+        m_ipEdit->setText(DEFAULT_IP);
+        Logger::warning("配置文件 IP 格式异常，已恢复默认值");
+    }
+
+    if (m_portSpin->value() == 0) {
+        m_portSpin->setValue(DEFAULT_PORT);
+        Logger::warning("配置文件端口异常，已恢复默认值");
+    }
+
     qDebug()<<"配置已从"<<configPath<<"加载";
 }
 
 void ConfigPage::saveConfig()
 {
     //提前检测目录的可写性，如果没有权限就提醒用户（待做）
+
+    //校验数据是否合法
+    QString error = validateInput();
+    if(!error.isEmpty()){
+        QMessageBox::warning(this, "参数错误", error);
+        return;
+    }
 
     //确保配置目录存在
     QString configDir = QCoreApplication::applicationDirPath() + "/config";
@@ -148,6 +169,29 @@ void ConfigPage::resetConfig()
     m_pollIntervalSpin->setValue(DEFAULT_POLL_INTERVAL);
     Logger::info("重置配置");
 }
+
+QString ConfigPage::validateInput() const
+{
+    QString ip = m_ipEdit->text().trimmed();
+    if(ip.isEmpty()){
+        return "地址不能为空";
+    }
+
+    QHostAddress addr;
+    if(!addr.setAddress(ip)){
+        return QString("IP地址格式不正确：%1").arg(ip);
+    }
+
+    if(m_portSpin->value() == 0){
+        return "端口号不能为0";
+    }
+
+    if(m_pollIntervalSpin->value()<100){
+        return "轮询周期不能小于100ms";
+    }
+    return {};
+}
+
 
 
 
