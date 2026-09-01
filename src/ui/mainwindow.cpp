@@ -130,6 +130,11 @@ void MainWindow::initConnect()
             [this](ModbusClient::DeviceState state, const QString &ip, quint16 port) {
                 onDeviceStateChanged(static_cast<int>(state), ip, port);
             });
+    //重连失败弹窗
+    connect(m_modbusClient, &ModbusClient::reconnectedFaild,
+            this, [this](const QString &ip, quint16 port){
+                QMessageBox::critical(this, "设备故障", QString("无法连接到%1:%2\n\n三次重连均失败，请检查设备状态或手动重新连接!").arg(ip).arg(port));
+            });
 
     // 寄存器数据上报，中转到MonitorPage，增加空指针保护
     connect(m_modbusClient, &ModbusClient::registerDataReady, this,
