@@ -100,3 +100,11 @@ cmake --build .
 ## License
 
 本项目仅用于学习和求职展示。
+
+## 界面截图
+
+### 设备监控页
+![设备监控](images/screenshot_monitor.png)
+
+### 实时数据曲线
+![数据曲线](images/screenshot_chart.png)
