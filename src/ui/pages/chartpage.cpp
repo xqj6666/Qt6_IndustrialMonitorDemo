@@ -1,11 +1,10 @@
-//===图表界面，把数据绘制成图表===
 #include "chartpage.h"
 #include "qcustomplot.h"
 
 #include <QSplitter>
 #include <QVBoxLayout>
-//获取Unix时间戳
 #include <QDateTime>
+#include <limits>
 
 ChartPage::ChartPage(QWidget *parent)
     : QWidget(parent)
@@ -52,7 +51,6 @@ void ChartPage::setupPlot(QCustomPlot *plot, const QString &title, const QString
     titleElement->setTextColor(QColor(220, 220, 220));
     plot->plotLayout()->addElement(0, 0, titleElement);
 
-
     // ---- 深色背景 ----
     plot->setBackground(QColor(30, 30, 30));
     plot->axisRect()->setBackground(QColor(30, 30, 30));
@@ -61,13 +59,11 @@ void ChartPage::setupPlot(QCustomPlot *plot, const QString &title, const QString
     plot->xAxis->setLabel("时间");
     plot->yAxis->setLabel(yLabel);
 
-    // 坐标轴文字颜色
     plot->xAxis->setTickLabelColor(QColor(200, 200, 200));
     plot->yAxis->setTickLabelColor(QColor(200, 200, 200));
     plot->xAxis->setLabelColor(QColor(200, 200, 200));
     plot->yAxis->setLabelColor(QColor(200, 200, 200));
 
-    // 坐标轴线条颜色
     plot->xAxis->setBasePen(QPen(QColor(100, 100, 100)));
     plot->yAxis->setBasePen(QPen(QColor(100, 100, 100)));
     plot->xAxis->setTickPen(QPen(QColor(100, 100, 100)));
@@ -75,48 +71,45 @@ void ChartPage::setupPlot(QCustomPlot *plot, const QString &title, const QString
     plot->xAxis->setSubTickPen(QPen(QColor(80, 80, 80)));
     plot->yAxis->setSubTickPen(QPen(QColor(80, 80, 80)));
 
-    // 网格线
     plot->xAxis->grid()->setPen(QPen(QColor(60, 60, 60)));
     plot->yAxis->grid()->setPen(QPen(QColor(60, 60, 60)));
 
-    // X 轴用时间格式显示
+    // X 轴用时间格式
     QSharedPointer<QCPAxisTickerDateTime> dateTicker(new QCPAxisTickerDateTime());
     dateTicker->setDateTimeFormat("HH:mm:ss");
     plot->xAxis->setTicker(dateTicker);
 
-    // ---- 分段着色：三条曲线对应三种颜色 ----
-
+    // ---- 分段着色：三条曲线 ----
     // graph(0) 正常段 - 绿色
     plot->addGraph();
     plot->graph(0)->setPen(QPen(QColor(0, 200, 0), 2));
     plot->graph(0)->setLineStyle(QCPGraph::lsLine);
-    plot->graph(0)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, 3));
+    plot->graph(0)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssNone));
 
     // graph(1) 警告段 - 黄色
     plot->addGraph();
     plot->graph(1)->setPen(QPen(QColor(255, 200, 0), 2));
     plot->graph(1)->setLineStyle(QCPGraph::lsLine);
-    plot->graph(1)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, 3));
+    plot->graph(1)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssNone));
 
     // graph(2) 危险段 - 红色
     plot->addGraph();
     plot->graph(2)->setPen(QPen(QColor(255, 50, 50), 2));
     plot->graph(2)->setLineStyle(QCPGraph::lsLine);
-    plot->graph(2)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssCircle, 3));
+    plot->graph(2)->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssNone));
 
     // 初始范围
     double now = QDateTime::currentDateTime().toSecsSinceEpoch();
     plot->xAxis->setRange(now - TIME_WINDOW, now);
     plot->yAxis->setRange(0, 1000);
 
-    // 允许用户鼠标拖拽和缩放（仅水平方向）
+    // 允许鼠标拖拽和缩放（仅水平）
     plot->setInteraction(QCP::iRangeDrag, true);
     plot->setInteraction(QCP::iRangeZoom, true);
     plot->axisRect()->setRangeDrag(Qt::Horizontal);
     plot->axisRect()->setRangeZoom(Qt::Horizontal);
 }
 
-// 接收寄存器数据，更新曲线：分段着色 + 交接点重叠
 void ChartPage::onRegisterDataReady(int startAddr, const QVector<quint16> &values)
 {
     if (values.size() < 2)
@@ -131,21 +124,24 @@ void ChartPage::onRegisterDataReady(int startAddr, const QVector<quint16> &value
     // ============================================================
     int tempGraphIndex;
     if (values.at(0) >= 70) {
-        tempGraphIndex = 2;  // 红色
+        tempGraphIndex = 2;
     } else if (values.at(0) >= 50) {
-        tempGraphIndex = 1;  // 黄色
+        tempGraphIndex = 1;
     } else {
-        tempGraphIndex = 0;  // 绿色
+        tempGraphIndex = 0;
     }
 
-    // 颜色切换时，把当前点同时添加到新旧两条曲线，避免断开
+    // 颜色切换时：
+    // 1. 把当前点添加到旧曲线（视觉桥接）
+    // 2. 给旧曲线添加 NaN（断开线条，防止后续不相邻点被连起来）
     if (tempGraphIndex != m_lastTempGraphIndex) {
-        m_tempPlot->graph(m_lastTempGraphIndex)->addData(now, values.at(0));
+        m_tempPlot->graph(m_lastTempGraphIndex)->addData(now, static_cast<double>(values.at(0)));
+        m_tempPlot->graph(m_lastTempGraphIndex)->addData(now, std::numeric_limits<double>::quiet_NaN());
     }
-    m_tempPlot->graph(tempGraphIndex)->addData(now, values.at(0));
+    m_tempPlot->graph(tempGraphIndex)->addData(now, static_cast<double>(values.at(0)));
     m_lastTempGraphIndex = tempGraphIndex;
 
-    // 三条曲线都要移除旧数据
+    // 移除旧数据
     for (int i = 0; i < 3; ++i) {
         m_tempPlot->graph(i)->data()->removeBefore(now - TIME_WINDOW);
     }
@@ -158,17 +154,18 @@ void ChartPage::onRegisterDataReady(int startAddr, const QVector<quint16> &value
     // ============================================================
     int pressGraphIndex;
     if (values.at(1) >= 700) {
-        pressGraphIndex = 2;  // 红色
+        pressGraphIndex = 2;
     } else if (values.at(1) >= 500) {
-        pressGraphIndex = 1;  // 黄色
+        pressGraphIndex = 1;
     } else {
-        pressGraphIndex = 0;  // 绿色
+        pressGraphIndex = 0;
     }
 
     if (pressGraphIndex != m_lastPressGraphIndex) {
-        m_pressPlot->graph(m_lastPressGraphIndex)->addData(now, values.at(1));
+        m_pressPlot->graph(m_lastPressGraphIndex)->addData(now, static_cast<double>(values.at(1)));
+        m_pressPlot->graph(m_lastPressGraphIndex)->addData(now, std::numeric_limits<double>::quiet_NaN());
     }
-    m_pressPlot->graph(pressGraphIndex)->addData(now, values.at(1));
+    m_pressPlot->graph(pressGraphIndex)->addData(now, static_cast<double>(values.at(1)));
     m_lastPressGraphIndex = pressGraphIndex;
 
     for (int i = 0; i < 3; ++i) {
@@ -178,21 +175,3 @@ void ChartPage::onRegisterDataReady(int startAddr, const QVector<quint16> &value
     m_pressPlot->yAxis->rescale(true);
     m_pressPlot->replot();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
