@@ -53,7 +53,7 @@ private:
 private:
     QFile       *m_logFile = nullptr;
     QTextStream *m_stream  = nullptr;
-    QMutex       m_mutex;
+    QMutex       m_mutex;//这样不用new，也不用管理生命周期
 
 };
 
