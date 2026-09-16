@@ -113,9 +113,9 @@ void MainWindow::initCommunication()
 void MainWindow::initConnect()
 {
     // ===== Logger单例 -> MainWindow：接收日志消息 =====
-    connect(Logger::instance(), &Logger::logMessageReady, this,
+    connect(Logger::instance(), &Logger::messageLogged, this,
             [this](const QString &msg, Logger::Level level) {
-                onLogMessage(msg, static_cast<int>(level));
+                onMessageLogged(msg, static_cast<int>(level));
             });
 
     // ===== MainWindow -> ModbusClient：下发操作命令 原生connect优先 =====
@@ -211,7 +211,7 @@ void MainWindow::onDeviceStateChanged(int state,const QString &ip,quint16 port)
     }
 }
 
-void MainWindow::onLogMessage(const QString &formattedMsg, int level)
+void MainWindow::onMessageLogged(const QString &formattedMsg, int level)
 {
     // 根据日志级别设置颜色
     switch (static_cast<Logger::Level>(level)) {

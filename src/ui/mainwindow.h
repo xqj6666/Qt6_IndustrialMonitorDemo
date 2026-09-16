@@ -44,7 +44,7 @@ private:
 
 private slots:
     //数据链路：调用全局单例Logger->mainwindow
-    void onLogMessage(const QString &formattedMsg,int level);
+    void onMessageLogged(const QString &formattedMsg,int level);
     //数据链路：modbusclient -> mainwindow
     void onDeviceStateChanged(int state, const QString &ip, quint16 port);
 
